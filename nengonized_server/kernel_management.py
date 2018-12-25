@@ -4,6 +4,8 @@ import json
 from subprocess import PIPE
 import sys
 
+import websockets
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +53,28 @@ class Kernel(object):
             self.proc.kill()
 
 
-# class KernelManager
-        # addr = conf['graphql'][0]
-        # is_ipv6 = len(addr) > 2
-        # if is_ipv6:
-            # self.address = f'ws://[{addr[0]}]:{addr[1]}'
-        # else:
-            # self.address = f'ws://{addr[0]}:{addr[1]}'
-        # return self
+class ConnectedKernel(object):
+    def __init__(self, kernel):
+        self.kernel = kernel
+        self.gql_connection = None
 
+    async def __aenter__(self):
+        self.gql_connection = websockets.connect(self._get_connection_string(
+            self.kernel.conf['graphql']['addresses'][0]))
+        await self.gql_connection.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.gql_connection.__aexit__(exc_type, exc, tb)
+
+    @classmethod
+    def _get_connection_string(cls, addr):
+        is_ipv6 = len(addr) > 2
+        if is_ipv6:
+            return f'ws://[{addr[0]}]:{addr[1]}'
+        else:
+            return f'ws://{addr[0]}:{addr[1]}'
+
+    async def query(self, query_text):
+        await self.gql_connection.send(query_text)
+        return await self.gql_connection.recv()
