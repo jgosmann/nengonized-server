@@ -57,6 +57,7 @@ class ConnectedKernel(object):
     def __init__(self, kernel):
         self.kernel = kernel
         self.gql_connection = None
+        self.gql_connection_lock = asyncio.Lock()
 
     async def __aenter__(self):
         self.gql_connection = websockets.connect(self._get_connection_string(
@@ -65,7 +66,8 @@ class ConnectedKernel(object):
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
-        await self.gql_connection.__aexit__(exc_type, exc, tb)
+        async with self.gql_connection_lock:
+            await self.gql_connection.__aexit__(exc_type, exc, tb)
 
     @classmethod
     def _get_connection_string(cls, addr):
@@ -76,8 +78,9 @@ class ConnectedKernel(object):
             return f'ws://{addr[0]}:{addr[1]}'
 
     async def query(self, query_text):
-        await self.gql_connection.send(query_text)
-        return await self.gql_connection.recv()
+        async with self.gql_connection_lock:
+            await self.gql_connection.send(query_text)
+            return await self.gql_connection.recv()
 
 
 class Reloadable(object):
