@@ -78,3 +78,35 @@ class ConnectedKernel(object):
     async def query(self, query_text):
         await self.gql_connection.send(query_text)
         return await self.gql_connection.recv()
+
+
+class Reloadable(object):
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+        self._n_calls_ongoing = 0
+        self._cond_lock = asyncio.Condition()
+
+    async def __aenter__(self):
+        await self.wrapped.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return await self.wrapped.__aexit__(exc_type, exc, tb)
+
+    async def reload(self):
+        async with self._cond_lock:
+            await self._cond_lock.wait_for(lambda: self._n_calls_ongoing == 0)
+            await self.wrapped.__aexit__(None, None, None)
+            await self.wrapped.__aenter__()
+
+    async def call(self, method, *args, **kwargs):
+        async with self._cond_lock:
+            self._n_calls_ongoing += 1
+        try:
+            result = method(*args, **kwargs)
+            if asyncio.iscoroutine(result) or asyncio.isfuture(result):
+                result = await result
+            return result
+        finally:
+            async with self._cond_lock:
+                self._n_calls_ongoing -= 1

@@ -6,7 +6,8 @@ import sys
 
 import pytest
 
-from nengonized_server.kernel_management import ConnectedKernel, Kernel
+from nengonized_server.kernel_management import (
+        ConnectedKernel, Kernel, Reloadable)
 
 
 def create_stub_future(result):
@@ -96,19 +97,25 @@ class TestKernel(object):
                 ], any_order=True)
 
 
-class KernelStub(mock.MagicMock):
+class KernelMock(mock.NonCallableMagicMock):
     ipv4_conf = {'graphql': {'addresses': [('127.0.0.1', 12345)]}}
     ipv6_conf = {'graphql': {'addresses': [('::1', 12345, 0, 0)]}}
 
-    def __init__(self, conf):
+    def __init__(self, conf=ipv6_conf):
         super().__init__()
         self.conf = conf
+        self.pass_enter = asyncio.Event()
+        self.pass_enter.set()
+        self.__aenter__ = mock_coroutine(self)
+        self.__aexit__ = mock_coroutine(None)
 
     async def __aenter__(self):
+        await self.pass_enter.wait()
+        self.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
-        pass
+        return self.__aexit__(exc_type, exc, tb)
 
 
 @pytest.fixture
@@ -130,20 +137,20 @@ def ws_connect_mock(connection_mock):
 class TestConnectedKernel(object):
     @pytest.mark.asyncio
     @pytest.mark.parametrize('conf,url', [
-        (KernelStub.ipv4_conf, 'ws://127.0.0.1:12345'),
-        (KernelStub.ipv6_conf, 'ws://[::1]:12345'),
+        (KernelMock.ipv4_conf, 'ws://127.0.0.1:12345'),
+        (KernelMock.ipv6_conf, 'ws://[::1]:12345'),
     ])
     async def test_starts_kernel_and_connects(
             self, conf, url, ws_connect_mock, connection_mock):
-        async with KernelStub(conf) as kernel_stub:
-            async with ConnectedKernel(kernel_stub) as connected_kernel:
+        async with KernelMock(conf) as kernel_mock:
+            async with ConnectedKernel(kernel_mock) as connected_kernel:
                 ws_connect_mock.assert_called_once_with(url)
 
     @pytest.mark.asyncio
     async def test_disconnects(
             self, ws_connect_mock, connection_mock):
-        async with KernelStub(KernelStub.ipv6_conf) as kernel_stub:
-            async with ConnectedKernel(kernel_stub) as connected_kernel:
+        async with KernelMock() as kernel_mock:
+            async with ConnectedKernel(kernel_mock) as connected_kernel:
                 pass
         connection_mock.__aexit__.assert_called_once()
 
@@ -151,9 +158,69 @@ class TestConnectedKernel(object):
     async def test_can_send_queries_to_kernel(
             self, ws_connect_mock, connection_mock):
         connection_mock.recv = mock_coroutine('data')
-        async with KernelStub(KernelStub.ipv6_conf) as kernel_stub:
-            async with ConnectedKernel(kernel_stub) as connected_kernel:
+        async with KernelMock() as kernel_mock:
+            async with ConnectedKernel(kernel_mock) as connected_kernel:
                 result = await connected_kernel.query('{ model { id } }')
                 connection_mock.send.assert_called_once_with(
                         '{ model { id } }')
         assert result == 'data'
+
+
+class TestReloadable(object):
+    @pytest.mark.asyncio
+    async def test_enters_and_exits_wrapped_object(self):
+        kernel_mock = KernelMock()
+        async with Reloadable(kernel_mock) as reloadable:
+            kernel_mock.__aenter__.assert_called_once()
+        kernel_mock.__aexit__.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_exits_and_enters_wapped_object_on_reload(self):
+        kernel_mock = KernelMock()
+        async with Reloadable(kernel_mock) as reloadable:
+            kernel_mock.__aenter__.reset_mock()
+            await reloadable.reload()
+            kernel_mock.__aexit__.assert_called_once()
+            kernel_mock.__aenter__.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_forwards_calls(self):
+        kernel_mock = KernelMock()
+        async with Reloadable(kernel_mock) as reloadable:
+            kernel_mock.fn.return_value = 42
+            retval = await reloadable.call(kernel_mock.fn, 1, 2, kwarg=3)
+            kernel_mock.fn.assert_called_once_with(1, 2, kwarg=3)
+            assert retval == 42
+
+    @pytest.mark.asyncio
+    async def test_queues_call_until_reloaded(self):
+        kernel_mock = KernelMock()
+        async with Reloadable(kernel_mock) as reloadable:
+            kernel_mock.pass_enter.clear()
+            reload_task = asyncio.get_event_loop().create_task(
+                    reloadable.reload())
+            call_task = asyncio.get_event_loop().create_task(
+                    reloadable.call(kernel_mock.fn))
+            kernel_mock.fn.assert_not_called()
+            kernel_mock.pass_enter.set()
+            await call_task
+            kernel_mock.fn.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_queues_reload_until_calls_finished(self):
+        cont = asyncio.Event()
+        async def fn():
+            await cont.wait()
+
+        kernel_mock = KernelMock()
+        async with Reloadable(kernel_mock) as reloadable:
+            kernel_mock.__aexit__.reset_mock()
+            call_task = asyncio.get_event_loop().create_task(
+                    reloadable.call(fn))
+            reload_task = asyncio.get_event_loop().create_task(
+                    reloadable.reload())
+            kernel_mock.__aexit__.assert_not_called()
+            cont.set()
+            await call_task
+            await reload_task
+            kernel_mock.__aexit__.assert_called_once()
