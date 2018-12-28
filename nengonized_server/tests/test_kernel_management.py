@@ -7,7 +7,7 @@ import sys
 import pytest
 
 from nengonized_server.kernel_management import (
-        ConnectedKernel, Kernel, Reloadable)
+        ConnectedKernel, Kernel, Reloadable, Subscribable)
 
 
 def create_stub_future(result):
@@ -224,3 +224,37 @@ class TestReloadable(object):
             await call_task
             await reload_task
             kernel_mock.__aexit__.assert_called_once()
+
+
+class TestSubscribableKernel(object):
+    @pytest.mark.asyncio
+    async def test_notifies_subscriber_on_subcription(self):
+        dummy = mock.MagicMock()
+        dummy.__aenter__ = mock_coroutine(self)
+        dummy.__aexit__ = mock_coroutine(None)
+        dummy.fn.return_value = 42
+        observer = mock.MagicMock()
+
+        async with Subscribable(dummy) as subscribable:
+            await subscribable.subscribe(observer, dummy.fn, 1, 2, three=3)
+        dummy.fn.assert_called_once_with(1, 2, three=3)
+        observer.onNext.assert_called_once_with(42)
+
+    @pytest.mark.asyncio
+    async def test_notifies_subscriber_on_reload(self):
+        dummy = mock.MagicMock()
+        dummy.__aenter__ = mock_coroutine(self)
+        dummy.__aexit__ = mock_coroutine(None)
+        dummy.fn.return_value = 0
+        observer = mock.MagicMock()
+
+        async with Subscribable(dummy) as subscribable:
+            await subscribable.subscribe(observer, dummy.fn, 1, 2, three=3)
+            dummy.fn.reset_mock()
+            dummy.fn.return_value = 42
+            observer.onNext.reset_mock()
+
+            await subscribable.reload()
+
+        dummy.fn.assert_called_once_with(1, 2, three=3)
+        observer.onNext.assert_called_once_with(42)

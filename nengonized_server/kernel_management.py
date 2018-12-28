@@ -113,3 +113,23 @@ class Reloadable(object):
         finally:
             async with self._cond_lock:
                 self._n_calls_ongoing -= 1
+
+
+class Subscribable(Reloadable):
+    def __init__(self, wrapped):
+        super().__init__(wrapped)
+        self._subscriptions = []
+
+    async def subscribe(self, observer, method, *args, **kwargs):
+        subscription = (observer, method, args, kwargs)
+        self._subscriptions.append(subscription)
+        await self._update_subscriber(subscription)
+
+    async def reload(self):
+        await super().reload()
+        await asyncio.gather(
+                *(self._update_subscriber(s) for s in self._subscriptions))
+
+    async def _update_subscriber(self, subscription):
+        observer, method, args, kwargs = subscription
+        observer.onNext(await self.call(method, *args, **kwargs))
