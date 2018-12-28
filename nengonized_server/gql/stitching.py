@@ -59,7 +59,7 @@ def stitch(type_):
             cls_dict[name] = new_type
             cls_dict['resolve_' + name] = _create_resolver(new_type, name)
     cls = type(ObjectType)(
-            'Stitched' + type_.__name__, (ObjectType,), cls_dict,
+            type_.__name__, (ObjectType,), cls_dict,
             interfaces=type_._meta.interfaces)
     _stitched[type_] = cls
     return cls

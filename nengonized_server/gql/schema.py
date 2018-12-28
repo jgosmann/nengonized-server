@@ -35,10 +35,12 @@ class Subscription(ObjectType):
         assert len(info.field_asts) == 1
         assert info.field_asts[0].name.value == 'kernel'
         query = print_ast(info.field_asts[0].selection_set)
+        fragments = [print_ast(x) for x in info.fragments.values()]
+        complete_query = '\n'.join([query] + fragments)
         subject = rx.subjects.Subject()
         asyncio.get_running_loop().create_task(
             info.context.subscribable.subscribe(
-                subject, info.context.kernel.query, query))
+                subject, info.context.kernel.query, complete_query))
         return subject.map(
                 lambda result: stitch(KernelRootQuery)(json.loads(result)))
 
