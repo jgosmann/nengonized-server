@@ -132,4 +132,4 @@ class Subscribable(Reloadable):
 
     async def _update_subscriber(self, subscription):
         observer, method, args, kwargs = subscription
-        observer.onNext(await self.call(method, *args, **kwargs))
+        observer.on_next(await self.call(method, *args, **kwargs))

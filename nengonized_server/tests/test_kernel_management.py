@@ -228,7 +228,7 @@ class TestSubscribableKernel(object):
         async with Subscribable(dummy) as subscribable:
             await subscribable.subscribe(observer, dummy.fn, 1, 2, three=3)
         dummy.fn.assert_called_once_with(1, 2, three=3)
-        observer.onNext.assert_called_once_with(42)
+        observer.on_next.assert_called_once_with(42)
 
     async def test_notifies_subscriber_on_reload(self):
         dummy = mock.MagicMock()
@@ -241,9 +241,9 @@ class TestSubscribableKernel(object):
             await subscribable.subscribe(observer, dummy.fn, 1, 2, three=3)
             dummy.fn.reset_mock()
             dummy.fn.return_value = 42
-            observer.onNext.reset_mock()
+            observer.on_next.reset_mock()
 
             await subscribable.reload()
 
         dummy.fn.assert_called_once_with(1, 2, three=3)
-        observer.onNext.assert_called_once_with(42)
+        observer.on_next.assert_called_once_with(42)
