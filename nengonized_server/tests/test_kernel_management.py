@@ -10,6 +10,9 @@ from nengonized_server.kernel_management import (
         ConnectedKernel, Kernel, Reloadable, Subscribable)
 
 
+pytestmark = pytest.mark.asyncio
+
+
 def create_stub_future(result):
     f = asyncio.Future()
     f.set_result(result)
@@ -65,25 +68,21 @@ async def cse_mock():
 
 
 class TestKernel(object):
-    @pytest.mark.asyncio
     async def test_on_enter_starts_kernel_with_given_arguments(self, cse_mock):
         async with Kernel('foo', 'bar') as kernel:
             cse_mock.assert_called_once_with(
                 sys.executable, '-m', 'nengonized_kernel', 'foo', 'bar',
                 stdout=PIPE, stderr=PIPE)
 
-    @pytest.mark.asyncio
     async def test_on_exit_terminates_kernel(self, cse_mock):
         async with Kernel() as kernel:
             pass
         cse_mock.proc.terminate.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_reads_kernel_conf(self, cse_mock):
         async with Kernel() as kernel:
             assert kernel.conf == {'field': 42}
 
-    @pytest.mark.asyncio
     async def test_logs_kernel_stdout_and_stderr(self, cse_mock):
         kernel = Kernel()
         kernel.logger = mock.MagicMock()
@@ -135,7 +134,6 @@ def ws_connect_mock(connection_mock):
 
 
 class TestConnectedKernel(object):
-    @pytest.mark.asyncio
     @pytest.mark.parametrize('conf,url', [
         (KernelMock.ipv4_conf, 'ws://127.0.0.1:12345'),
         (KernelMock.ipv6_conf, 'ws://[::1]:12345'),
@@ -146,7 +144,6 @@ class TestConnectedKernel(object):
             async with ConnectedKernel(kernel_mock) as connected_kernel:
                 ws_connect_mock.assert_called_once_with(url)
 
-    @pytest.mark.asyncio
     async def test_disconnects(
             self, ws_connect_mock, connection_mock):
         async with KernelMock() as kernel_mock:
@@ -154,7 +151,6 @@ class TestConnectedKernel(object):
                 pass
         connection_mock.__aexit__.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_can_send_queries_to_kernel(
             self, ws_connect_mock, connection_mock):
         connection_mock.recv = mock_coroutine('data')
@@ -167,14 +163,12 @@ class TestConnectedKernel(object):
 
 
 class TestReloadable(object):
-    @pytest.mark.asyncio
     async def test_enters_and_exits_wrapped_object(self):
         kernel_mock = KernelMock()
         async with Reloadable(kernel_mock) as reloadable:
             kernel_mock.__aenter__.assert_called_once()
         kernel_mock.__aexit__.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_exits_and_enters_wapped_object_on_reload(self):
         kernel_mock = KernelMock()
         async with Reloadable(kernel_mock) as reloadable:
@@ -183,7 +177,6 @@ class TestReloadable(object):
             kernel_mock.__aexit__.assert_called_once()
             kernel_mock.__aenter__.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_forwards_calls(self):
         kernel_mock = KernelMock()
         async with Reloadable(kernel_mock) as reloadable:
@@ -192,7 +185,6 @@ class TestReloadable(object):
             kernel_mock.fn.assert_called_once_with(1, 2, kwarg=3)
             assert retval == 42
 
-    @pytest.mark.asyncio
     async def test_queues_call_until_reloaded(self):
         kernel_mock = KernelMock()
         async with Reloadable(kernel_mock) as reloadable:
@@ -206,7 +198,6 @@ class TestReloadable(object):
             await call_task
             kernel_mock.fn.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_queues_reload_until_calls_finished(self):
         cont = asyncio.Event()
         async def fn():
@@ -227,7 +218,6 @@ class TestReloadable(object):
 
 
 class TestSubscribableKernel(object):
-    @pytest.mark.asyncio
     async def test_notifies_subscriber_on_subcription(self):
         dummy = mock.MagicMock()
         dummy.__aenter__ = mock_coroutine(self)
@@ -240,7 +230,6 @@ class TestSubscribableKernel(object):
         dummy.fn.assert_called_once_with(1, 2, three=3)
         observer.onNext.assert_called_once_with(42)
 
-    @pytest.mark.asyncio
     async def test_notifies_subscriber_on_reload(self):
         dummy = mock.MagicMock()
         dummy.__aenter__ = mock_coroutine(self)
