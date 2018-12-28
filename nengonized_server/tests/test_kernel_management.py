@@ -97,8 +97,8 @@ class TestKernel(object):
 
 
 class KernelMock(mock.NonCallableMagicMock):
-    ipv4_conf = {'graphql': {'addresses': [('127.0.0.1', 12345)]}}
-    ipv6_conf = {'graphql': {'addresses': [('::1', 12345, 0, 0)]}}
+    ipv4_conf = {'graphql': [('127.0.0.1', 12345)]}
+    ipv6_conf = {'graphql': [('::1', 12345, 0, 0)]}
 
     def __init__(self, conf=ipv6_conf):
         super().__init__()
