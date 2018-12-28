@@ -140,25 +140,26 @@ class TestConnectedKernel(object):
     ])
     async def test_starts_kernel_and_connects(
             self, conf, url, ws_connect_mock, connection_mock):
-        async with KernelMock(conf) as kernel_mock:
-            async with ConnectedKernel(kernel_mock) as connected_kernel:
-                ws_connect_mock.assert_called_once_with(url)
+        kernel_mock = KernelMock(conf)
+        async with ConnectedKernel(kernel_mock) as connected_kernel:
+            kernel_mock.__aenter__.assert_called_once()
+            ws_connect_mock.assert_called_once_with(url)
 
-    async def test_disconnects(
+    async def test_disconnects_stops_kernel(
             self, ws_connect_mock, connection_mock):
-        async with KernelMock() as kernel_mock:
-            async with ConnectedKernel(kernel_mock) as connected_kernel:
-                pass
+        kernel_mock = KernelMock()
+        async with ConnectedKernel(kernel_mock) as connected_kernel:
+            pass
         connection_mock.__aexit__.assert_called_once()
+        kernel_mock.__aexit__.assert_called_once()
 
     async def test_can_send_queries_to_kernel(
             self, ws_connect_mock, connection_mock):
         connection_mock.recv = mock_coroutine('data')
-        async with KernelMock() as kernel_mock:
-            async with ConnectedKernel(kernel_mock) as connected_kernel:
-                result = await connected_kernel.query('{ model { id } }')
-                connection_mock.send.assert_called_once_with(
-                        '{ model { id } }')
+        async with ConnectedKernel(KernelMock()) as connected_kernel:
+            result = await connected_kernel.query('{ model { id } }')
+            connection_mock.send.assert_called_once_with(
+                    '{ model { id } }')
         assert result == 'data'
 
 

@@ -60,14 +60,16 @@ class ConnectedKernel(object):
         self.gql_connection_lock = asyncio.Lock()
 
     async def __aenter__(self):
-        self.gql_connection = websockets.connect(self._get_connection_string(
-            self.kernel.conf['graphql']['addresses'][0]))
-        await self.gql_connection.__aenter__()
+        await self.kernel.__aenter__()
+        self.gql_connection = await websockets.connect(
+            self._get_connection_string(
+                self.kernel.conf['graphql'][0])).__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
         async with self.gql_connection_lock:
             await self.gql_connection.__aexit__(exc_type, exc, tb)
+        await self.kernel.__aexit__(exc_type, exc, tb)
 
     @classmethod
     def _get_connection_string(cls, addr):
