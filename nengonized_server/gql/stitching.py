@@ -16,30 +16,30 @@ def to_stitched_type(type_):
         return stitch(type_)
 
 
-def _to_resolved_type(new_type):
-    if isinstance(new_type, Field):
-        return _to_resolved_type(new_type.type)
-    elif isinstance(new_type, (List, NonNull)):
-        return _to_resolved_type(new_type.of_type)
+def _cast(new_type, obj):
+    if isinstance(new_type, NonNull):
+        assert obj is not None
+        return _cast(new_type.of_type, obj)
+    elif obj is None:
+        return None
+    elif isinstance(new_type, List):
+        return [_cast(new_type.of_type, x) for x in obj]
+    elif isinstance(new_type, Field):
+        return _cast(new_type.type, obj)
     elif isinstance(new_type, type) and issubclass(new_type, ObjectType):
-        return new_type
+        return new_type(obj)
     else:
-        return lambda x: x
+        return obj
 
 
 def _create_resolver(new_type, name):
-    resolved_type = _to_resolved_type(new_type)
-    if isinstance(new_type, List):
-        return lambda self, info, resolved_type=resolved_type, name=name: [
-                resolved_type(x) for x in self.data[name]]
-    else:
-        return lambda self, info, resolved_type=resolved_type, name=name: (
-                resolved_type(self.data[name]))
+    return lambda self, info, new_type=new_type, name=name: (
+        _cast(new_type, self.data[name]))
 
 
 _stitched = {}
 def stitch(type_):
-    assert issubclass(type_, ObjectType)
+    assert issubclass(type_, ObjectType), f"Expected ObjectType, got {type_}."
 
     if type_ in _stitched:
         return _stitched[type_]
@@ -52,7 +52,9 @@ def stitch(type_):
     }
     for name in dir(type_):
         attr = getattr(type_, name)
-        if isinstance(attr, (Field, List, NonNull, Scalar)):
+        if isinstance(attr, relay.node.NodeField):
+            continue
+        elif isinstance(attr, (Field, List, NonNull, Scalar)):
             new_type = to_stitched_type(attr)
             cls_dict[name] = new_type
             cls_dict['resolve_' + name] = _create_resolver(new_type, name)

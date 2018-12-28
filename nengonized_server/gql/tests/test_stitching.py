@@ -78,6 +78,16 @@ class TestStitch(object):
 
         assert stitched.resolve_field(None).resolve_field(None) == 'innerValue'
 
+    def test_handles_non_null_list_of_non_null_nested_type(self):
+        InnerType = create_obj_type_mock(Field(String))
+        OuterType = create_obj_type_mock(NonNull(List(NonNull(InnerType))))
+        data = {'field': [{'field': 'a'}, {'field': 'b'}]}
+        stitched = stitch(OuterType)(data)
+
+        outer = stitched.resolve_field(None)
+        print(outer)
+        assert [x.resolve_field(None) for x in outer] == ['a', 'b']
+
     def test_handles_interfaces(self):
         class TestInterface(Interface):
             field = String()
