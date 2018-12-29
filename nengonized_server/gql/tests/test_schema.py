@@ -27,7 +27,7 @@ async def test_can_subscribe_to_kernel():
     observer, method, query = (
             context_mock.subscribable.subscribe.call_args[0])
     assert method is context_mock.kernel.query
-    assert re.sub(r'\s+', '', query) == '{model{label}}'
+    assert re.sub(r'\s+', '', query) == 'querySub{model{label}}'
 
     observer.on_next('{ "model": { "label": "12345" } }')
     observer_mock.on_next.assert_called_once()
@@ -50,9 +50,8 @@ async def test_supports_fragments():
     observer, method, query = (
             context_mock.subscribable.subscribe.call_args[0])
     assert method is context_mock.kernel.query
-    print(query)
     assert re.sub(r'\s+', '', query) == re.sub(r'\s+', '', '''
-        { model { ...fragmentName } }
+        query Sub { model { ...fragmentName } }
         fragment fragmentName on NengoNetwork { label }
     ''')
 
@@ -60,3 +59,23 @@ async def test_supports_fragments():
     observer_mock.on_next.assert_called_once()
     assert observer_mock.on_next.call_args[0][0].data == {
             'kernel': { 'model': { 'label': '12345' } } }
+
+
+async def test_supports_variables():
+    context_mock = mock.MagicMock()
+    context_mock.subscribable.subscribe = mock_coroutine(None)
+    context_mock.subscribable.subscribe.return_value = dummy_coro()
+    obs = schema.execute(
+            '''subscription Sub($id: ID!) { kernel {
+                node(id: $id) { ... on NengoEnsemble { label } } } }
+            ''',
+            context=context_mock, variables={'id': 'ID42'},
+            allow_subscriptions=True)
+
+    context_mock.subscribable.subscribe.assert_called_once()
+    observer, method, query = (
+            context_mock.subscribable.subscribe.call_args[0])
+    assert method is context_mock.kernel.query
+    assert re.sub(r'\s+', '', query) == re.sub(r'\s+', '', '''
+        query Sub($id: ID!) { node(id: $id) { ... on NengoEnsemble { label } } }
+    ''')
