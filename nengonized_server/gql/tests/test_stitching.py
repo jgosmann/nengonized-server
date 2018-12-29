@@ -94,3 +94,8 @@ class TestStitch(object):
         OrigType = create_obj_type_mock(String(), interfaces=[TestInterface])
 
         assert stitch(OrigType)._meta.interfaces == [TestInterface]
+
+    def test_handles_self_referential_types(self):
+        OrigType = create_obj_type_mock(Field(lambda: OrigType))
+        stitched = stitch(OrigType)
+        assert stitched.field.type is stitched

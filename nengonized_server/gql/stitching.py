@@ -47,6 +47,7 @@ def stitch(type_):
     def __init__(self, data):
         self.data = data
 
+    _stitched[type_] = lambda type_=type_: _stitched[type_]
     cls_dict = {
         '__init__': __init__
     }
