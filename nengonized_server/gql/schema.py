@@ -31,17 +31,18 @@ class Subscription(ObjectType):
     def resolve_kernel(self, info):
         assert len(info.field_asts) == 1
         assert info.field_asts[0].name.value == 'kernel'
+
         if len(info.operation.variable_definitions) > 0:
             variable_defs = '(' + ','.join(
                     print_ast(info.operation.variable_definitions)) + ')'
         else:
             variable_defs = ''
-        print(variable_defs)
         query = print_ast(info.field_asts[0].selection_set)
         fragments = [print_ast(x) for x in info.fragments.values()]
         complete_query = '\n'.join([
             f'''query {info.operation.name.value}{variable_defs} {query}''']
             + fragments)
+
         subject = rx.subjects.Subject()
         asyncio.get_running_loop().create_task(
             info.context.subscribable.subscribe(

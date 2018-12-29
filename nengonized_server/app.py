@@ -23,7 +23,10 @@ class GraphQlHandler(WebSocketHandler):
 
 class QueryHandler(GraphQlHandler):
     def on_message(self, message):
-        result = self.schema.execute(message, context=self.context)
+        data = json.loads(message)
+        result = self.schema.execute(
+                data['query'], variables=data['variables'],
+                context=self.context)
         if result.errors:
             for error in result.errors:
                 self.logger.error(error)
@@ -32,8 +35,10 @@ class QueryHandler(GraphQlHandler):
 
 class SubscriptionHandler(GraphQlHandler):
     def on_message(self, message):
+        data = json.loads(message)
         result = self.schema.execute(
-                message, context=self.context, allow_subscriptions=True)
+                data['query'], variables=data['variables'],
+                context=self.context, allow_subscriptions=True)
         if hasattr(result, 'subscribe'):
             result.subscribe(self.update)
         if hasattr(result, 'errors'):

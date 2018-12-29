@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from unittest import mock
 from subprocess import PIPE
@@ -146,9 +147,10 @@ class TestConnectedKernel(object):
             self, ws_connect_mock, connection_mock):
         connection_mock.recv = mock_coroutine('data')
         async with ConnectedKernel(KernelMock()) as connected_kernel:
-            result = await connected_kernel.query('{ model { id } }')
-            connection_mock.send.assert_called_once_with(
-                    '{ model { id } }')
+            result = await connected_kernel.query(
+                    '{ model { id } }', variables={'var': 'value'})
+            connection_mock.send.assert_called_once_with(json.dumps(
+                {'query': '{ model { id } }', 'variables': {'var': 'value'}}))
         assert result == 'data'
 
 

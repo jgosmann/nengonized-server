@@ -1,3 +1,4 @@
+import json
 from unittest import mock
 
 import graphene
@@ -31,8 +32,10 @@ class TestQueryHandler(object):
         handler = create_handler(QueryHandler, context=context, schema=schema)
         handler.write_message = mock.MagicMock()
 
-        handler.on_message('input-msg')
-        schema.execute.assert_called_once_with('input-msg', context=context)
+        handler.on_message(json.dumps(
+            {'query': 'input-msg', 'variables': {'var': 'value'}}))
+        schema.execute.assert_called_once_with(
+                'input-msg', variables={'var': 'value'}, context=context)
         handler.write_message.assert_called_once_with('{"value": "foo"}')
 
     def test_error_handling(self):
@@ -42,8 +45,10 @@ class TestQueryHandler(object):
         handler = create_handler(QueryHandler, context=context, schema=schema)
         handler.write_message = mock.MagicMock()
 
-        handler.on_message('input-msg')
-        schema.execute.assert_called_once_with('input-msg', context=context)
+        handler.on_message(json.dumps(
+            {'query': 'input-msg', 'variables': None}))
+        schema.execute.assert_called_once_with(
+                'input-msg', variables=None, context=context)
         handler.write_message.assert_called_once_with('{"error": null}')
 
 
@@ -57,9 +62,11 @@ class TestSubsriptionHandler(object):
                 SubscriptionHandler, context=context, schema=schema)
         handler.write_message = mock.MagicMock()
 
-        handler.on_message('input-msg')
+        handler.on_message(json.dumps(
+            {'query': 'input-msg', 'variables': {'var': 'value'}}))
         schema.execute.assert_called_once_with(
-                'input-msg', context=context, allow_subscriptions=True)
+                'input-msg', context=context, variables={'var': 'value'},
+                allow_subscriptions=True)
         observable_mock.subscribe.assert_called_once()
 
         subscriber = observable_mock.subscribe.call_args[0][0]
@@ -74,9 +81,11 @@ class TestSubsriptionHandler(object):
                 SubscriptionHandler, context=context, schema=schema)
         handler.write_message = mock.MagicMock()
 
-        handler.on_message('input-msg')
+        handler.on_message(json.dumps(
+            {'query': 'input-msg', 'variables': None}))
         schema.execute.assert_called_once_with(
-                'input-msg', context=context, allow_subscriptions=True)
+                'input-msg', context=context, variables=None,
+                allow_subscriptions=True)
 
     def test_update_error_handling(self):
         context = object()
@@ -87,9 +96,11 @@ class TestSubsriptionHandler(object):
                 SubscriptionHandler, context=context, schema=schema)
         handler.write_message = mock.MagicMock()
 
-        handler.on_message('input-msg')
+        handler.on_message(json.dumps(
+            {'query': 'input-msg', 'variables': None}))
         schema.execute.assert_called_once_with(
-                'input-msg', context=context, allow_subscriptions=True)
+                'input-msg', context=context, variables=None,
+                allow_subscriptions=True)
         observable_mock.subscribe.assert_called_once()
 
         subscriber = observable_mock.subscribe.call_args[0][0]

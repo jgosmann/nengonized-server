@@ -80,9 +80,10 @@ class ConnectedKernel(object):
         else:
             return f'ws://{addr[0]}:{addr[1]}'
 
-    async def query(self, query_text):
+    async def query(self, query_text, variables=None):
         async with self.gql_connection_lock:
-            await self.gql_connection.send(query_text)
+            await self.gql_connection.send(json.dumps({
+                'query': query_text, 'variables': variables}))
             return await self.gql_connection.recv()
 
 
