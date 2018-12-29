@@ -22,13 +22,14 @@ class Kernel(object):
                 sys.executable, '-m', 'nengonized_kernel', *self.args,
                 stdout=PIPE, stderr=PIPE)
         self.logger.info("Started kernel with arguments %s.", self.args)
-        self.conf = await self._read_json_conf(self.proc.stdout)
-        self.logger.info("Received kernel configuration %s.", self.conf)
 
         asyncio.get_running_loop().create_task(
-                self._pipe(self.proc.stdout, 'stdout', logging.INFO))
-        asyncio.get_running_loop().create_task(
                 self._pipe(self.proc.stderr, 'stderr', logging.ERROR))
+
+        self.conf = await self._read_json_conf(self.proc.stdout)
+        self.logger.info("Received kernel configuration %s.", self.conf)
+        asyncio.get_running_loop().create_task(
+                self._pipe(self.proc.stdout, 'stdout', logging.INFO))
 
         return self
 
