@@ -24,9 +24,6 @@ class Context(object):
 class ServerRootQuery(ObjectType):
     node = relay.Node.Field()
 
-    def resolve_node(self, info):
-        raise NotImplementedError()
-
 
 class Subscription(ObjectType):
     kernel = Field(stitch(KernelRootQuery))
