@@ -1,4 +1,4 @@
-from graphene import Field, Interface, List, NonNull, ObjectType, String
+from graphene import Field, Interface, List, NonNull, ObjectType, relay, String
 import pytest
 
 from nengonized_server.gql.stitching import stitch, to_stitched_type
@@ -99,3 +99,10 @@ class TestStitch(object):
         OrigType = create_obj_type_mock(Field(lambda: OrigType))
         stitched = stitch(OrigType)
         assert stitched.field.type is stitched
+
+    def test_handles_relay_node(self):
+        OrigType = create_obj_type_mock(relay.Node.Field())
+        get_node = lambda cls, info, id_: 'get_node'
+        stitched = stitch(OrigType, get_node)
+        assert stitched.get_node(None, None) == 'get_node'
+        assert isinstance(stitched.field, relay.node.NodeField)

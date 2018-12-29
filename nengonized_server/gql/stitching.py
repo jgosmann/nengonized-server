@@ -38,7 +38,7 @@ def _create_resolver(new_type, name):
 
 
 _stitched = {}
-def stitch(type_):
+def stitch(type_, get_node=None):
     assert issubclass(type_, ObjectType), f"Expected ObjectType, got {type_}."
 
     if type_ in _stitched:
@@ -54,7 +54,8 @@ def stitch(type_):
     for name in dir(type_):
         attr = getattr(type_, name)
         if isinstance(attr, relay.node.NodeField):
-            continue
+            cls_dict[name] = relay.Node.Field()
+            cls_dict['get_node'] = classmethod(get_node)
         elif isinstance(attr, (Field, List, NonNull, Scalar)):
             new_type = to_stitched_type(attr)
             cls_dict[name] = new_type
