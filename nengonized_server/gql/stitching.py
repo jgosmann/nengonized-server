@@ -1,4 +1,5 @@
-from graphene import Field, List, NonNull, ObjectType, relay, Scalar
+from graphql_relay import from_global_id
+from graphene import Field, ID, List, NonNull, ObjectType, relay, Scalar
 
 
 _stitched = {}
@@ -28,6 +29,8 @@ def _cast(new_type, obj):
         return _cast(new_type.type, obj)
     elif isinstance(new_type, type) and issubclass(new_type, ObjectType):
         return new_type(obj)
+    elif isinstance(new_type, ID):
+        return from_global_id(obj)[1]
     else:
         return obj
 
@@ -37,8 +40,22 @@ def _create_resolver(new_type, name):
         _cast(new_type, self.data[name]))
 
 
+class StitchedRelayNodeField(relay.node.NodeField):
+    def __init__(self, name, *args, **kwargs):
+        super().__init__(relay.node.Node, *args, **kwargs)
+        self.name = name
+
+    def get_resolver(self, parent_resolver):
+        return self.stitched_resolver
+
+    def stitched_resolver(self, obj, info, id):
+        type_, local_id = from_global_id(id)
+        graphene_type = info.schema.get_type(type_).graphene_type
+        return graphene_type(obj.data[self.name])
+
+
 _stitched = {}
-def stitch(type_, get_node=None):
+def stitch(type_):
     assert issubclass(type_, ObjectType), f"Expected ObjectType, got {type_}."
 
     if type_ in _stitched:
@@ -54,12 +71,13 @@ def stitch(type_, get_node=None):
     for name in dir(type_):
         attr = getattr(type_, name)
         if isinstance(attr, relay.node.NodeField):
-            cls_dict[name] = relay.Node.Field()
-            cls_dict['get_node'] = classmethod(get_node)
+            cls_dict[name] = StitchedRelayNodeField(name)
         elif isinstance(attr, (Field, List, NonNull, Scalar)):
             new_type = to_stitched_type(attr)
             cls_dict[name] = new_type
             cls_dict['resolve_' + name] = _create_resolver(new_type, name)
+    if relay.Node in type_._meta.interfaces:
+        cls_dict['resolve_id'] = _create_resolver(ID(), 'id')
     cls = type(ObjectType)(
             type_.__name__, (ObjectType,), cls_dict,
             interfaces=type_._meta.interfaces)

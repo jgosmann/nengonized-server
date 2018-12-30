@@ -15,6 +15,19 @@ import websockets
 from .stitching import stitch
 
 
+def construct_stitched_query(info):
+    if len(info.operation.variable_definitions) > 0:
+        variable_defs = '(' + ','.join(
+                print_ast(info.operation.variable_definitions)) + ')'
+    else:
+        variable_defs = ''
+    query = print_ast(info.field_asts[0].selection_set)
+    fragments = [print_ast(x) for x in info.fragments.values()]
+    return '\n'.join([
+        f'''query {info.operation.name.value}{variable_defs} {query}''']
+        + fragments)
+
+
 class Context(object):
     def __init__(self, subscribable, kernel):
         self.subscribable = subscribable
@@ -32,21 +45,11 @@ class Subscription(ObjectType):
         assert len(info.field_asts) == 1
         assert info.field_asts[0].name.value == 'kernel'
 
-        if len(info.operation.variable_definitions) > 0:
-            variable_defs = '(' + ','.join(
-                    print_ast(info.operation.variable_definitions)) + ')'
-        else:
-            variable_defs = ''
-        query = print_ast(info.field_asts[0].selection_set)
-        fragments = [print_ast(x) for x in info.fragments.values()]
-        complete_query = '\n'.join([
-            f'''query {info.operation.name.value}{variable_defs} {query}''']
-            + fragments)
-
         subject = rx.subjects.Subject()
         asyncio.get_running_loop().create_task(
             info.context.subscribable.subscribe(
-                subject, info.context.kernel.query, complete_query,
+                subject, info.context.kernel.query,
+                construct_stitched_query(info),
                 variables=info.variable_values))
         return subject.map(
                 lambda result: stitch(KernelRootQuery)(json.loads(result)))

@@ -1,4 +1,7 @@
-from graphene import Field, Interface, List, NonNull, ObjectType, relay, String
+from graphene import (
+        Field, Interface, List, NonNull, ObjectType, relay, Schema, String)
+from graphql_relay import to_global_id
+from nengonized_kernel.gql.testing import assert_gql_data_equals
 import pytest
 
 from nengonized_server.gql.stitching import stitch, to_stitched_type
@@ -101,8 +104,33 @@ class TestStitch(object):
         assert stitched.field.type is stitched
 
     def test_handles_relay_node(self):
-        OrigType = create_obj_type_mock(relay.Node.Field())
-        get_node = lambda cls, info, id_: 'get_node'
-        stitched = stitch(OrigType, get_node)
-        assert stitched.get_node(None, None) == 'get_node'
-        assert isinstance(stitched.field, relay.node.NodeField)
+        class A(ObjectType, interfaces=[relay.Node]):
+            field = String()
+
+        class B(ObjectType):
+            a = Field(A)
+            node = relay.Node.Field()
+
+        class Root(ObjectType):
+            stitched = Field(stitch(B))
+
+            def resolve_stitched(self, info):
+                return stitch(B)({'node': {'field': 'value'}})
+
+        schema = Schema(query=Root)
+        id_ = to_global_id('A', 'foo')
+        result = schema.execute('''query Test($id: ID!) {
+            stitched {
+                node(id: $id) {
+                    __typename,
+                    ... on A { field }
+                }
+            }
+        }''', variables={'id': id_})
+
+        assert_gql_data_equals(
+            result, {'stitched': {'node': {
+                '__typename': 'A',
+                'field': 'value'
+            }}}
+        )
