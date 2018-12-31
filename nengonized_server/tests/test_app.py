@@ -142,3 +142,24 @@ class TestSubsriptionHandler(object):
             'subscriptionId': '1',
         }))
         disposable_mock.dispose.assert_called_once()
+
+    def test_disposes_subscriptions_on_connection_close(self):
+        context = mock.MagicMock()
+        schema = mock.MagicMock()
+        disposable_mock = mock.MagicMock()
+        observable_mock = mock.MagicMock()
+        observable_mock.subscribe.return_value = disposable_mock
+        schema.execute.return_value = observable_mock
+        handler = create_handler(
+                SubscriptionHandler, context=context, schema=schema)
+        handler.write_message = mock.MagicMock()
+
+        handler.on_message(json.dumps({
+            'action': 'subscribe',
+            'subscriptionId': '1',
+            'query': 'input-msg',
+            'variables': {},
+        }))
+
+        handler.close()
+        disposable_mock.dispose.assert_called_once()

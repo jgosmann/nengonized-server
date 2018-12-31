@@ -70,8 +70,10 @@ class SubscriptionHandler(GraphQlHandler):
                 self.logger.error(error)
         self.write_message(json.dumps(result.data))
 
-    def close():
-        pass
+    def close(self):
+        for subscription in self.subscriptions.values():
+            subscription.dispose()
+        self.subscriptions.clear()
 
 
 def make_app(context):
