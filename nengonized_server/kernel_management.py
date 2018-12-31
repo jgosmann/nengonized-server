@@ -4,6 +4,7 @@ import json
 from subprocess import PIPE
 import sys
 
+import rx
 import websockets
 
 
@@ -58,13 +59,15 @@ class ConnectedKernel(object):
     def __init__(self, kernel):
         self.kernel = kernel
         self.gql_connection = None
+        self.gql_socket = None
         self.gql_connection_lock = asyncio.Lock()
 
     async def __aenter__(self):
         await self.kernel.__aenter__()
-        self.gql_connection = await websockets.connect(
+        self.gql_connection = websockets.connect(
             self._get_connection_string(
-                self.kernel.conf['graphql'][0])).__aenter__()
+                self.kernel.conf['graphql'][0]))
+        self.gql_socket = await self.gql_connection.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -82,22 +85,29 @@ class ConnectedKernel(object):
 
     async def query(self, query_text, variables=None):
         async with self.gql_connection_lock:
-            await self.gql_connection.send(json.dumps({
+            await self.gql_socket.send(json.dumps({
                 'query': query_text, 'variables': variables}))
-            return await self.gql_connection.recv()
+            return await self.gql_socket.recv()
 
 
-class Reloadable(object):
+class Reloadable(rx.core.ObservableBase):
     def __init__(self, wrapped):
+        super().__init__()
         self.wrapped = wrapped
         self._n_calls_ongoing = 0
         self._cond_lock = asyncio.Condition()
+        self._observers = []
 
     async def __aenter__(self):
         await self.wrapped.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
+        for observer in self._observers:
+            if exc:
+                observer.on_error(exc)
+            else:
+                observer.on_completed()
         return await self.wrapped.__aexit__(exc_type, exc, tb)
 
     async def reload(self):
@@ -105,6 +115,7 @@ class Reloadable(object):
             await self._cond_lock.wait_for(lambda: self._n_calls_ongoing == 0)
             await self.wrapped.__aexit__(None, None, None)
             await self.wrapped.__aenter__()
+            self._notify_observers()
 
     async def call(self, method, *args, **kwargs):
         async with self._cond_lock:
@@ -118,6 +129,16 @@ class Reloadable(object):
             async with self._cond_lock:
                 self._n_calls_ongoing -= 1
 
+    def _notify_observers(self):
+        for observer in self._observers:
+            observer.on_next(self)
+
+    def _subscribe_core(self, observer, scheduler=None):
+        self._observers.append(observer)
+        def dispose(observer=observer):
+            self._observers.remove(observer)
+        return dispose
+
 
 class Subscribable(Reloadable):
     def __init__(self, wrapped):
@@ -128,6 +149,10 @@ class Subscribable(Reloadable):
         subscription = (observer, method, args, kwargs)
         self._subscriptions.append(subscription)
         await self._update_subscriber(subscription)
+        return subscription
+
+    def unsubscribe(self, subscription):
+        self._subscriptions.remove(subscription)
 
     async def reload(self):
         await super().reload()

@@ -34,16 +34,35 @@ class QueryHandler(GraphQlHandler):
 
 
 class SubscriptionHandler(GraphQlHandler):
+    def initialize(self, context, schema):
+        super().initialize(context, schema)
+        self.subscriptions = {}
+
     def on_message(self, message):
         data = json.loads(message)
+        if data['action'] == 'subscribe':
+            self.subscribe(
+                data.get('subscriptionId', None), data['query'], data['variables'])
+        elif data['action'] == 'unsubscribe':
+            self.unsubscribe(data['subscriptionId'])
+        else:
+            self.logger.error("Invalid action: %s", data['action'])
+
+    def subscribe(self, subscription_id, query, variables):
         result = self.schema.execute(
-                data['query'], variables=data['variables'],
+                query, variables=variables,
                 context=self.context, allow_subscriptions=True)
         if hasattr(result, 'subscribe'):
-            result.subscribe(self.update)
+            if subscription_id in self.subscriptions:
+                self.unsubscribe(subscription_id)
+            self.subscriptions[subscription_id] = result.subscribe(self.update)
         if hasattr(result, 'errors'):
             for error in result.errors:
                 self.logger.error(error)
+
+    def unsubscribe(self, subscription_id):
+        self.subscriptions[subscription_id].dispose()
+        del self.subscriptions[subscription_id]
 
     def update(self, result):
         if result.errors:

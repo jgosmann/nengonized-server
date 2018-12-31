@@ -29,8 +29,8 @@ def construct_stitched_query(info):
 
 
 class Context(object):
-    def __init__(self, subscribable, kernel):
-        self.subscribable = subscribable
+    def __init__(self, reloadable, kernel):
+        self.reloadable = reloadable
         self.kernel = kernel
 
 
@@ -45,14 +45,17 @@ class Subscription(ObjectType):
         assert len(info.field_asts) == 1
         assert info.field_asts[0].name.value == 'kernel'
 
-        subject = rx.subjects.Subject()
-        asyncio.get_running_loop().create_task(
-            info.context.subscribable.subscribe(
-                subject, info.context.kernel.query,
-                construct_stitched_query(info),
-                variables=info.variable_values))
-        return subject.map(
-                lambda result: stitch(KernelRootQuery)(json.loads(result)))
+        return rx.Observable.merge(
+                rx.Observable.just(True),  # Send data at least once
+                info.context.reloadable
+            ).flat_map(
+                lambda _: rx.Observable.from_future(
+                    asyncio.get_running_loop().create_task(
+                        info.context.reloadable.call(
+                            info.context.kernel.query,
+                            construct_stitched_query(info),
+                            variables=info.variable_values)))
+            ).map(lambda result: stitch(KernelRootQuery)(json.loads(result)))
 
 
 schema = Schema(query=ServerRootQuery, subscription=Subscription)

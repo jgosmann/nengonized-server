@@ -62,8 +62,12 @@ class TestSubsriptionHandler(object):
                 SubscriptionHandler, context=context, schema=schema)
         handler.write_message = mock.MagicMock()
 
-        handler.on_message(json.dumps(
-            {'query': 'input-msg', 'variables': {'var': 'value'}}))
+        handler.on_message(json.dumps({
+            'action': 'subscribe',
+            'subscriptionId': '1',
+            'query': 'input-msg',
+            'variables': {'var': 'value'},
+        }))
         schema.execute.assert_called_once_with(
                 'input-msg', context=context, variables={'var': 'value'},
                 allow_subscriptions=True)
@@ -81,8 +85,12 @@ class TestSubsriptionHandler(object):
                 SubscriptionHandler, context=context, schema=schema)
         handler.write_message = mock.MagicMock()
 
-        handler.on_message(json.dumps(
-            {'query': 'input-msg', 'variables': None}))
+        handler.on_message(json.dumps({
+            'action': 'subscribe',
+            'subscriptionId': '1',
+            'query': 'input-msg',
+            'variables': None,
+        }))
         schema.execute.assert_called_once_with(
                 'input-msg', context=context, variables=None,
                 allow_subscriptions=True)
@@ -96,8 +104,12 @@ class TestSubsriptionHandler(object):
                 SubscriptionHandler, context=context, schema=schema)
         handler.write_message = mock.MagicMock()
 
-        handler.on_message(json.dumps(
-            {'query': 'input-msg', 'variables': None}))
+        handler.on_message(json.dumps({
+            'action': 'subscribe',
+            'subscriptionId': '1',
+            'query': 'input-msg',
+            'variables': None,
+        }))
         schema.execute.assert_called_once_with(
                 'input-msg', context=context, variables=None,
                 allow_subscriptions=True)
@@ -106,3 +118,27 @@ class TestSubsriptionHandler(object):
         subscriber = observable_mock.subscribe.call_args[0][0]
         subscriber(dummySchema.execute('{ error }'))
         handler.write_message.assert_called_once_with('{"error": null}')
+
+    def test_unsubscribe(self):
+        context = mock.MagicMock()
+        schema = mock.MagicMock()
+        disposable_mock = mock.MagicMock()
+        observable_mock = mock.MagicMock()
+        observable_mock.subscribe.return_value = disposable_mock
+        schema.execute.return_value = observable_mock
+        handler = create_handler(
+                SubscriptionHandler, context=context, schema=schema)
+        handler.write_message = mock.MagicMock()
+
+        handler.on_message(json.dumps({
+            'action': 'subscribe',
+            'subscriptionId': '1',
+            'query': 'input-msg',
+            'variables': {},
+        }))
+
+        handler.on_message(json.dumps({
+            'action': 'unsubscribe',
+            'subscriptionId': '1',
+        }))
+        disposable_mock.dispose.assert_called_once()

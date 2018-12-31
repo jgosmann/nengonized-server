@@ -208,6 +208,14 @@ class TestReloadable(object):
             await reload_task
             kernel_mock.__aexit__.assert_called_once()
 
+    async def test_is_observable(self):
+        observable_mock = mock.MagicMock()
+        kernel_mock = KernelMock()
+        async with Reloadable(kernel_mock) as reloadable:
+            reloadable.subscribe(observable_mock)
+            await reloadable.reload()
+            observable_mock.on_next.assert_called_once()
+
 
 class TestSubscribableKernel(object):
     async def test_notifies_subscriber_on_subcription(self):

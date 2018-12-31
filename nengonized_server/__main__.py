@@ -7,7 +7,7 @@ from tornado.ioloop import IOLoop
 
 from .app import make_app
 from .filesystem import FileWatcher
-from .kernel_management import ConnectedKernel, Kernel, Subscribable
+from .kernel_management import ConnectedKernel, Kernel, Reloadable
 from .gql.schema import Context, schema
 
 
@@ -17,9 +17,9 @@ async def start_nengonized():
     filename = sys.argv[1]
     fw = FileWatcher(filename)  # start first to not miss any changes
     kernel = ConnectedKernel(Kernel(filename))
-    async with Subscribable(kernel) as subscribable:
-        fw.callback = subscribable.reload
-        context = Context(subscribable, kernel)
+    async with Reloadable(kernel) as reloadable:
+        fw.callback = reloadable.reload
+        context = Context(reloadable, kernel)
         app = make_app(context)
         app.listen(8998)
         await requestShutdown.wait()
