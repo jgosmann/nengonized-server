@@ -16,6 +16,7 @@ requestShutdown = asyncio.Event()
 async def start_nengonized():
     filename = sys.argv[1]
     fw = FileWatcher(filename)  # start first to not miss any changes
+    fw.start_watching()
     kernel = ConnectedKernel(Kernel(filename))
     async with Reloadable(kernel) as reloadable:
         fw.callback = reloadable.reload
